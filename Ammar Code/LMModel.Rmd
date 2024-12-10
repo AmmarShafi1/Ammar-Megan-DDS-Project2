@@ -1,0 +1,337 @@
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+```
+
+
+```{r}
+# Load the data
+wine_data <- read.csv(file.choose())
+```
+
+
+```{r}
+# Summary statistics
+summary(wine_data)
+```
+
+
+```{r}
+wine_data[wine_data == ""] <- NA
+# Check for missing values
+colSums(is.na(wine_data))
+```
+
+```{r}
+wine_location_data = read.csv(file.choose(), header = TRUE)
+```
+
+```{r}
+summary(wine_location_data)
+```
+```{r}
+# Replace blank strings with NA
+wine_location_data[wine_location_data == ""] <- NA
+# Because there are multiple types of capitalization (red and Red)
+wine_location_data$type <- toupper(wine_location_data$type)
+#and just in case for location
+wine_location_data$location <- toupper(wine_location_data$location)
+
+colSums(is.na(wine_location_data))
+```
+```{r}
+merged_data = merge(wine_data,wine_location_data, by="ID")
+```
+
+```{r}
+summary(merged_data)
+```
+```{r}
+head(merged_data)
+```
+```{r}
+# Filter the combined dataset to only include rows where location is California
+filtered_combined_data <- subset(merged_data, location == "CALIFORNIA")
+
+# View the first few rows of the filtered combined dataset
+head(filtered_combined_data)
+```
+```{r}
+# Change NA values in type to None
+filtered_combined_data$type[is.na(filtered_combined_data$type)] <- "none"
+```
+
+```{r}
+# Convert the 'type' column to numeric
+filtered_combined_data$type_numeric <- as.numeric(factor(filtered_combined_data$type))
+```
+
+```{r}
+summary(filtered_combined_data)
+```
+
+```{r}
+library(ggplot2)
+
+# Function to create scatterplots for numerical variables vs quality
+scatterplots_vs_quality <- function(data, quality_col) {
+  # Get names of numerical columns (excluding the quality column)
+  numerical_cols <- sapply(data, is.numeric)
+  numerical_data <- data[, numerical_cols]
+  numerical_data <- numerical_data[, !(colnames(numerical_data) %in% quality_col)]
+  
+  # Loop through numerical columns and create scatterplots
+  for (col in colnames(numerical_data)) {
+    p <- ggplot(data, aes_string(x = col, y = quality_col)) +
+      geom_point(alpha = 0.5) +
+      labs(title = paste(quality_col, "vs", col), x = col, y = quality_col) +
+      theme_minimal()
+    
+    # Explicitly print the plot within the loop
+    print(p)
+  }
+}
+
+# Example usage
+scatterplots_vs_quality(filtered_combined_data, "quality")
+
+```
+
+```{r}
+# Columns to normalize
+numeric_cols <- c("fixed.acidity", "volatile.acidity", "citric.acid", 
+                  "residual.sugar", "chlorides", "free.sulfur.dioxide", 
+                  "total.sulfur.dioxide", "density", "pH", "sulphates", "alcohol")
+
+# Apply Min-Max Normalization directly to the dataframe
+for (col in numeric_cols) {
+  filtered_combined_data[[col]] <- (filtered_combined_data[[col]] - min(filtered_combined_data[[col]])) / (max(filtered_combined_data[[col]]) - min(filtered_combined_data[[col]]))
+}
+```
+
+```{r}
+summary(filtered_combined_data)
+```
+
+```{r}
+write.csv(filtered_combined_data, "data_normalized.csv", row.names = FALSE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Function to create bar charts of quality counts grouped by attributes
+barplots_quality_counts <- function(data, quality_col) {
+  # Ensure the quality column is treated as a factor (categorical variable)
+  data[[quality_col]] <- as.factor(data[[quality_col]])
+  
+  # Get names of all columns except the quality column
+  columns <- colnames(data)[colnames(data) != quality_col]
+  
+  # Loop through columns and create bar charts
+  for (col in columns) {
+    # If the column is numeric, bin it into categories
+    if (is.numeric(data[[col]])) {
+      data[[col]] <- cut(
+        data[[col]], 
+        breaks = 5, # Adjust the number of bins as needed
+        include.lowest = TRUE
+      )
+    }
+    
+    # Create the bar chart, separating by quality
+    p <- ggplot(data, aes_string(x = col, fill = quality_col)) +
+      geom_bar(position = "dodge") +
+      facet_wrap(as.formula(paste("~", quality_col))) +
+      labs(title = paste("Count of", quality_col, "by", col), x = col, y = "Count") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels
+    
+    # Explicitly print the plot within the loop
+    print(p)
+  }
+}
+
+# Example usage
+barplots_quality_counts(filtered_combined_data, "quality")
+
+
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Function to create bar charts of quality counts grouped by attributes
+barplots_quality_counts <- function(data, quality_col) {
+  # Ensure the quality column is treated as a factor (categorical variable)
+  data[[quality_col]] <- as.factor(data[[quality_col]])
+  
+  # Get names of all columns except the quality column
+  columns <- colnames(data)[colnames(data) != quality_col]
+  
+  # Loop through columns and create bar charts
+  for (col in columns) {
+    # If the column is numeric, bin it into categories
+    if (is.numeric(data[[col]])) {
+      data[[col]] <- cut(
+        data[[col]], 
+        breaks = 10, # Adjust the number of bins as needed
+        include.lowest = TRUE
+      )
+    }
+    
+    # Create the bar chart, separating bars by quality
+    p <- ggplot(data, aes_string(x = col, fill = quality_col)) +
+      geom_bar(position = "dodge") +
+      labs(title = paste("Distribution of", quality_col, "by", col), 
+           x = col, 
+           y = "Count") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels
+    
+    # Explicitly print the plot within the loop
+    print(p)
+  }
+}
+
+# Example usage
+barplots_quality_counts(filtered_combined_data, "quality")
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Function to create percentage bar charts of quality counts grouped by attributes
+percentage_barplots_quality <- function(data, quality_col) {
+  # Ensure the quality column is treated as a factor (categorical variable)
+  data[[quality_col]] <- as.factor(data[[quality_col]])
+  
+  # Get names of all columns except the quality column
+  columns <- colnames(data)[colnames(data) != quality_col]
+  
+  # Loop through columns and create percentage bar charts
+  for (col in columns) {
+    # If the column is numeric, bin it into categories
+    if (is.numeric(data[[col]])) {
+      data[[col]] <- cut(
+        data[[col]], 
+        breaks = 5, # Adjust the number of bins as needed
+        include.lowest = TRUE
+      )
+    }
+    
+    # Calculate percentages within each group
+    percentage_data <- data %>%
+      group_by_at(vars(col, quality_col)) %>%
+      summarise(count = n()) %>%
+      group_by_at(vars(col)) %>%
+      mutate(percentage = (count / sum(count)) * 100)
+    
+    # Create the bar chart showing percentages
+    p <- ggplot(percentage_data, aes_string(x = col, y = "percentage", fill = quality_col)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      labs(title = paste("Percentage Distribution of", quality_col, "by", col), 
+           x = col, 
+           y = "Percentage (%)") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis labels
+    
+    # Explicitly print the plot within the loop
+    print(p)
+  }
+}
+
+# Example usage
+percentage_barplots_quality(filtered_combined_data, "quality")
+
+```
+
+```{r}
+# Export the filtered combined dataset to a CSV file
+write.csv(filtered_combined_data, "filtered_combined_data.csv", row.names = FALSE)
+```
+
+
+```{r}
+# Correlation matrix and heatmap
+cor_matrix <- cor(filtered_combined_data[ , sapply(filtered_combined_data, is.numeric)])
+corrplot(cor_matrix, method = "color", addCoef.col = "black", number.cex = 0.7,
+         tl.col = "black", tl.srt = 45, title = "Correlation Heatmap")
+
+# Distribution of quality
+ggplot(wine_data, aes(x = quality)) +
+  geom_bar(fill = "steelblue") +
+  ggtitle("Distribution of Wine Quality") +
+  xlab("Wine Quality") +
+  ylab("Count")
+
+```
+
+```{r}
+# Load necessary library for regression
+library(caret)
+
+# Select features based on EDA
+selected_features <- filtered_combined_data %>%
+  select(quality, alcohol, volatile.acidity, density, type_numeric, citric.acid)
+
+# Split data into training and testing sets
+set.seed(123)
+trainIndex <- createDataPartition(selected_features$quality, p = 0.8, 
+                                   list = FALSE, times = 1)
+train_data <- selected_features[trainIndex, ]
+test_data <- selected_features[-trainIndex, ]
+
+# Train a linear regression model
+model <- lm(quality ~ alcohol + volatile.acidity + density + type_numeric + citric.acid, 
+            data = train_data)
+
+# Summary of the model
+summary(model)
+```
+
+
+```{r}
+# Predict and round to the nearest whole number
+predictions <- round(predict(model, newdata = test_data))
+```
+
+
+```{r}
+summary(predictions)
+```
+
+
+```{r}
+# Evaluate the model
+mae <- mean(abs(predictions - test_data$quality))
+cat("Mean Absolute Error (MAE):", mae, "\n")
+
+# Plot predictions vs actual values
+ggplot(data = test_data, aes(x = quality, y = predictions)) +
+  geom_point(color = "blue") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  ggtitle("Predicted vs Actual Quality") +
+  xlab("Actual Quality") +
+  ylab("Predicted Quality")
+
+```
+
+```{r}
+pred_data = read.csv(file.choose(),header = TRUE)
+```
+
+```{r}
+head(pred_data)
+```
+
+```{r}
+pred_data[pred_data == ""] <- NA
+# Check for missing values
+colSums(is.na(wine_data))
+```

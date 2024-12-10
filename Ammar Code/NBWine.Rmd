@@ -1,0 +1,72 @@
+```{r}
+# Load required libraries
+library(e1071) # For Naive Bayes
+library(combinat) # For generating feature combinations
+library(Metrics) # For calculating MAE
+
+# Load your dataset
+data <- read.csv("data_normalized.csv")
+
+# Ensure 'quality' is a factor for classification
+data$quality <- as.factor(data$quality)
+
+# Define the target variable and feature set
+target <- "quality"
+features <- setdiff(names(data), c(target, "ID")) # Exclude ID and target from features
+
+# Function to compute MAE for a given set of features
+evaluate_model <- function(selected_features) {
+  formula <- as.formula(paste(target, "~", paste(selected_features, collapse = "+")))
+  
+  # Split the data into training and testing sets
+  set.seed(123)
+  train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+  train_data <- data[train_index, ]
+  test_data <- data[-train_index, ]
+  
+  # Train the Naive Bayes model
+  model <- naiveBayes(formula, data = train_data)
+  
+  # Predict on test data
+  predictions <- predict(model, test_data)
+  
+  # Calculate MAE
+  actual <- as.numeric(test_data$quality)
+  predicted <- as.numeric(predictions)
+  mae <- mae(actual, predicted)
+  
+  return(mae)
+}
+
+# Generate all possible feature combinations
+all_combinations <- unlist(lapply(1:length(features), function(x) {
+  combn(features, x, simplify = FALSE)
+}), recursive = FALSE)
+
+# Evaluate MAE for each combination and print results
+results <- list()
+for (comb in all_combinations) {
+  mae <- evaluate_model(comb)
+  results <- append(results, list(list(features = comb, mae = mae)))
+  
+  # Print the current combination and its MAE
+  cat("Features:", paste(comb, collapse = ", "), "\n")
+  cat("MAE:", mae, "\n\n")
+}
+
+# Find the best combination (lowest MAE)
+best_model <- results[[which.min(sapply(results, function(x) x$mae))]]
+```
+
+```{r}
+best_model
+```
+
+```{r}
+# Output the best features and corresponding MAE
+cat("Best Feature Combination:\n")
+print(best_model$features)
+cat("\nLowest MAE:\n", best_model$mae)
+
+```
+

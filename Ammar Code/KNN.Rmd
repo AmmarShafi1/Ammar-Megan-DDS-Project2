@@ -1,0 +1,102 @@
+```{r}
+# Load necessary library
+library(caret)
+library(class)
+library(Metrics) # For calculating MAE
+```
+
+
+```{r}
+# Load the data
+data <- read.csv(file.choose())
+```
+
+
+```{r}
+# Identify numerical columns to normalize
+numerical_columns <- c(
+  "fixed.acidity", "volatile.acidity", "citric.acid", "residual.sugar",
+  "chlorides", "free.sulfur.dioxide", "total.sulfur.dioxide", 
+  "density", "pH", "sulphates", "alcohol"
+)
+
+# Normalize the numerical columns
+preprocess_params <- preProcess(data[, numerical_columns], method = c("center", "scale"))
+data_normalized <- predict(preprocess_params, data)
+
+# Save the normalized dataset (optional)
+write.csv(data_normalized, "data_normalized.csv", row.names = FALSE)
+
+# Display the normalized data
+head(data_normalized)
+
+```
+```{r}
+summary(data_normalized)
+```
+
+```{r}
+colSums(is.na(data_normalized))
+```
+```{r}
+columns_to_keep <- c(
+  "fixed.acidity", "volatile.acidity", "citric.acid", "residual.sugar",
+  "chlorides", "free.sulfur.dioxide", "total.sulfur.dioxide", 
+  "density", "pH", "sulphates", "alcohol", "quality" # Add your target column
+)
+```
+
+
+```{r}
+# Subset the dataset to keep only the relevant columns
+data_knn <- data[, columns_to_keep]
+```
+
+```{r}
+# Split the data into training and testing sets
+set.seed(123) # For reproducibility
+index <- createDataPartition(data_knn$quality, p = 0.8, list = FALSE)
+train_data <- data_knn[index, ]
+test_data <- data_knn[-index, ]
+
+# Extract predictors and target
+train_x <- train_data[, -which(names(train_data) == "quality")]
+train_y <- train_data$quality
+test_x <- test_data[, -which(names(test_data) == "quality")]
+test_y <- test_data$quality
+```
+
+```{r}
+# Convert target variables to factors with levels 3 to 9
+train_y <- factor(train_y, levels = 3:9)
+test_y <- factor(test_y, levels = 3:9)
+```
+
+
+```{r}
+# Train the KNN model
+knn_model <- knn(train = train_x, test = test_x, cl = train_y, k = 5)
+
+# Convert predictions to factors with levels 3 to 9
+knn_model <- factor(knn_model, levels = 3:9)
+```
+
+
+```{r}
+# Evaluate the model with a confusion matrix
+conf_matrix <- confusionMatrix(knn_model, test_y)
+print(conf_matrix)
+```
+
+```{r}
+knn_model_numeric <- as.numeric(as.character(knn_model))
+test_y_numeric <- as.numeric(as.character(test_y))
+
+```
+
+```{r}
+mae_value <- mae(test_y_numeric, knn_model_numeric)
+print(paste("Mean Absolute Error (MAE):", mae_value))
+```
+
+

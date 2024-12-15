@@ -1,0 +1,260 @@
+#Wine Data Analysis #1
+```{r}
+library(readxl)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(caret)
+library(e1071)
+#install.packages("smotefamily")
+library(smotefamily)
+#install.packages("class")
+library(class)
+```
+
+```{r}
+#Data Files
+data1= read.csv("Wine Types And Locations .csv")
+data2= read_excel("Wine Train.xlsx")
+
+# Merge Data
+data3= merge(data2, data1, by = "ID", all.x = TRUE)
+
+
+# Merged CSV
+write.csv(data3, "data3.csv", row.names = FALSE)
+```
+
+```{r}
+#View and Print
+view(data3)
+head(data3)
+nrow(data3)
+```
+
+```{r}
+#Data No Missing Values
+data= read_csv("data3.csv")
+data
+wine_data = data%>%drop_na()
+view(wine_data)
+nrow(wine_data)
+
+#Filter Data to California Wine
+california_data = wine_data[wine_data$location == "California", ]
+view(california_data)
+nrow(california_data)
+```
+
+```{r}
+#Regression Model
+model = lm(quality ~ `fixed acidity` + `residual sugar` + pH + alcohol, data = california_data)
+summary(model)
+
+# Predictions
+predictions = predict(model, newdata = california_data)
+predictions
+mae = mean(abs(california_data$quality - predictions))
+mae
+```
+
+```{r}
+#KNN Model
+Wine_Clean = california_data %>% dplyr::select('quality','fixed acidity','residual sugar', pH, alcohol)
+Wine_Clean
+nrow(Wine_Clean)
+```
+
+```{r}
+# Training and Test Set
+set.seed(123)
+indxTrain = createDataPartition(y = Wine_Clean$quality, p = 0.70, list = FALSE)
+wine_training = Wine_Clean[indxTrain, ]
+wine_testing = Wine_Clean[-indxTrain, ]
+
+#Train Control
+ctrl = trainControl(method = "repeatedcv", repeats = 3)
+
+# Train the KNN model
+knnFit <- train(
+  quality ~ ., 
+  data = wine_training, 
+  method = "knn", 
+  trControl = ctrl, 
+  preProcess = c("center", "scale"), 
+  tuneGrid = expand.grid(k = c(3, 5, 7))
+)
+
+# View and Plot
+print(knnFit)
+plot(knnFit)
+```
+
+```{r}
+#Predict Testing Data Set
+knnPredict = predict(knnFit, newdata = wine_testing)
+
+# MAE 
+mae = mean(abs(knnPredict - wine_testing$quality))
+print(paste("Mean Absolute Error (MAE):", round(mae, 3)))
+
+# Convert predicted and actual values to factors
+knnPredict = factor(knnPredict, levels = sort(as.numeric(levels(wine_testing$quality))))
+wine_testing$quality = factor(wine_testing$quality)
+levels(knnPredict)
+levels(wine_testing$quality)
+knnPredict = knn(train = wine_training[, -which(names(wine_training) == "quality")],
+                  test = wine_testing[, -which(names(wine_testing) == "quality")],
+                  cl = wine_training$quality, k = 5, prob = TRUE)
+
+# Confusion Matrix KNN
+knn_conf_matrix = confusionMatrix(knnPredict, wine_testing$quality)
+print(knn_conf_matrix)
+table(knnPredict)
+table(wine_testing$quality)
+
+```
+
+```{r}
+#SMOTE
+independent = wine_training[, -1]
+dependent = wine_training$quality
+min_class_size <- min(table(dependent))  
+K_dynamic = max(1, min_class_size - 1)  
+smote_output = SMOTE(independent, dependent, K = K_dynamic, dup_size = 2)
+smote_data = smote_output$data
+colnames(smote_data)[ncol(smote_data)] <- "quality"
+table(smote_data$quality)
+
+#KNN with SMOTE
+ctrl = trainControl(method = "cv", number = 5)  
+
+#KNN Ranges 1-20
+set.seed(123) 
+knn_tune = train(
+  quality ~ ., 
+  data = smote_data, 
+  method = "knn", 
+  trControl = ctrl, 
+  preProcess = c("center", "scale"), 
+  tuneGrid = expand.grid(k = seq(1, 20, by = 1))
+)
+
+#Results
+print(knn_tune)
+
+#KNN Final
+final_knn = train(
+  quality ~ ., 
+  data = smote_data, 
+  method = "knn", 
+  trControl = ctrl, 
+  preProcess = c("center", "scale"), 
+  tuneGrid = expand.grid(k = best_k)
+)
+
+#Best K Value
+best_k = knn_tune$bestTune$k
+print(paste("Best k:", best_k))
+
+#Test Set Prediction
+knnPredict_final = predict(final_knn, newdata = wine_testing)
+
+# KNN Confusion Matrix
+conf_matrix_final = confusionMatrix(knnPredict_final, wine_testing$quality)
+print(conf_matrix_final)
+
+#F1 Scores
+f1_scores <- conf_matrix_final$byClass[, "F1"]
+print(f1_scores)
+
+#Mean Absolute Error for Multi-Class Prediction
+knnPredict_final_numeric = as.numeric(as.character(knnPredict_final))
+wine_testing_quality_numeric = as.numeric(as.character(wine_testing$quality))
+mae_knn <- mean(abs(knnPredict_final_numeric - wine_testing_quality_numeric))
+print(paste("Mean Absolute Error (MAE):", round(mae_knn, 3)))
+```
+
+```{r}
+#KNN Heatmap Multiclass Prediction
+conf_matrix_knn = confusionMatrix(knnPredict_final, wine_testing$quality)
+cm_table_knn = as.data.frame(conf_matrix_knn$table)
+ggplot(cm_table_knn, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), color = "white", size = 5) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(
+    title = "Confusion Matrix Heatmap: KNN Model for Multi-Class 4 to 9",
+    x = "Predicted Value",
+    y = "Actual Value",
+    fill = "Frequency"
+  ) +
+  theme_minimal()
+
+#Categories: High, Medium, Low
+grouped_predictions = ifelse(knnPredict_final %in% c(4, 5), "Low",
+                             ifelse(knnPredict_final %in% c(6, 7), "Medium", "High"))
+grouped_actuals = ifelse(wine_testing$quality %in% c(4, 5), "Low",
+                         ifelse(wine_testing$quality %in% c(6, 7), "Medium", "High"))
+grouped_conf_matrix = table(Predicted = grouped_predictions, Actual = grouped_actuals)
+print(grouped_conf_matrix)
+
+#Heatmap for High, Medium, Low Class
+cm_grouped_df <- as.data.frame(grouped_conf_matrix)
+cm_grouped_df$Predicted = factor(cm_grouped_df$Predicted, levels = c("Low", "Medium", "High"))
+cm_grouped_df$Actual <- factor(cm_grouped_df$Actual, levels = c("Low", "Medium", "High"))
+ggplot(cm_grouped_df, aes(x = Predicted, y = Actual, fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), color = "white", size = 5) +
+  scale_fill_gradient(low = "lightblue", high = "blue") +
+  labs(
+    title = "Confusion Matrix: Low, Medium, High Qualities",
+    x = "Predicted Category",
+    y = "Actual Category",
+    fill = "Frequency"
+  ) +
+  theme_minimal()
+
+
+#Training and Test Set
+set.seed(123)
+indxTrain = createDataPartition(y = Wine_Clean$quality, p = 0.70, list = FALSE)
+wine_training2 = Wine_Clean[indxTrain, ]
+wine_testing2 = Wine_Clean[-indxTrain, ]
+
+# Train Naive Bayes Model without SMOTE
+nb_model = naiveBayes(quality ~ `fixed acidity` + `residual sugar` + pH + alcohol, data = wine_training2)
+
+# Prediction Test Set (without SMOTE)
+nb_predictions = predict(nb_model, newdata = wine_testing2)
+
+# Prediction and Actual to Numeric
+wine_testing2$predicted_quality = as.numeric(as.character(nb_predictions))
+wine_testing2$actual_quality = as.numeric(as.character(wine_testing2$quality))
+
+# Calculate Mean Absolute Error (MAE)
+mae = mean(abs(wine_testing2$actual_quality - wine_testing2$predicted_quality))
+print(paste("Mean Absolute Error (MAE):", round(mae, 3)))
+
+#Prediction Values
+nb_predictions = factor(nb_predictions, levels = levels(wine_testing2$quality))
+wine_testing2$quality = factor(wine_testing2$quality)
+
+#Confusion Matrix for NB Model
+nb_conf_matrix = confusionMatrix(nb_predictions, wine_testing2$quality)
+print(nb_conf_matrix)
+
+#SMOTE
+smote_output = SMOTE(independent, dependent, K = 1, dup_size = 3)  
+nb_model_smote = naiveBayes(quality ~ ., data = smote_data, laplace = 2, prior = class_prior)
+f1_scores = nb_conf_matrix$byClass[, "F1"]
+print(f1_scores)
+
+```
+
+
+
+
+
+

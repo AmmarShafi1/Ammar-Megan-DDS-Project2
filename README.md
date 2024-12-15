@@ -2,6 +2,8 @@ Ammar Shafi and Megan Huy Fall 2024 DDS Project 2
 
 Video: https://youtu.be/Vbc_ceR505w
 
+RShiny Page: https://ddsfall24.shinyapps.io/DDS_Project_2_Ammar_Megan/
+
 # Wine Quality Prediction and Insights for Robert Renzoni Vineyards
 
 ## Introduction

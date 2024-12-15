@@ -72,7 +72,7 @@ ggplot(wine_data, aes(x = quality)) +
 ```{r}
 
 # Select relevant columns for the KNN model
-features <- wine_data[, c("volatile.acidity", "sulphates", "density", "alcohol")]
+features <- wine_data[, c("residual.sugar", "pH", "density", "alcohol")]
 target <- wine_data$quality
 
 # Normalize the feature columns
@@ -185,6 +185,13 @@ ggplot(wine_data, aes(x = alcohol, y = quality)) +
   geom_smooth(method = "lm", color = "red", se = FALSE) +
   theme_minimal() +
   labs(title = "Alcohol vs Quality", x = "Alcohol", y = "Quality")
+
+# 1.5 Alcohol vs Sugar (Increasing Trend)
+ggplot(wine_data, aes(x = residual.sugar, y = alcohol)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Sugar vs Alcohol", x = "Residual Sugar", y = "Alcohol")
 
 # 2. Total Sulfur Dioxide vs Quality (Decreasing Trend)
 ggplot(wine_data, aes(x = total.sulfur.dioxide, y = quality)) +
